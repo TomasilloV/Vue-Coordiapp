@@ -48,6 +48,46 @@
           </div>
         </div>
       </div>
+      <!-- Tabla de pruebas hardcodeada -->
+      <div class="tabla-pruebas-container">
+        <h3>Tabla de Pruebas</h3>
+        <table class="tabla-pruebas">
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Teléfono</th>
+              <th>Tipo de Tarea</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1029384756</td>
+              <td>9284019248</td>
+              <td>A01LP4G</td>
+              <td><button class="boton-iniciar">Iniciar</button></td>
+            </tr>
+            <tr>
+              <td>1029384756</td>
+              <td>8293838201</td>
+              <td>QMSMPZOG</td>
+              <td><button class="boton-iniciar">Iniciar</button></td>
+            </tr>
+            <tr>
+              <td>1029384756</td>
+              <td>0293847383</td>
+              <td>TSMSMPZ4G</td>
+              <td><button class="boton-iniciar">Iniciar</button></td>
+            </tr>
+            <tr>
+              <td>1029384756</td>
+              <td>7383828291</td>
+              <td>D21LP4N</td>
+              <td><button class="boton-iniciar">Iniciar</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <div v-if="totalPaginas > 1" class="paginacion">
         <button @click="pagina--" :disabled="pagina === 1">Anterior</button>
         <span>Página {{ pagina }} de {{ totalPaginas }}</span>
@@ -387,6 +427,45 @@ function regresar() {
 .mensaje-vacio {
   margin-top: 2rem;
   color: #6b7280;
+}
+
+.tabla-pruebas-container {
+  margin-top: 2.5rem;
+  text-align: left;
+}
+.tabla-pruebas {
+  width: 100%;
+  border-collapse: collapse;
+  background: #23272f;
+  color: #ecf0f1;
+  margin-top: 0.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.tabla-pruebas th, .tabla-pruebas td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #34495e;
+}
+.tabla-pruebas th {
+  background: #a3ca38;
+  color: #23272f;
+}
+.tabla-pruebas tr:last-child td {
+  border-bottom: none;
+}
+.boton-iniciar {
+  background: #3498db;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.boton-iniciar:hover {
+  background: #217dbb;
 }
 
 @media (max-width: 768px) {

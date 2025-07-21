@@ -8,7 +8,13 @@
         placeholder="Usuario"
         required
       />
-      <button type="submit">Iniciar</button>
+      <button 
+        type="submit" 
+        :disabled="iniciandoSesion"
+        :class="{ 'boton-procesando': iniciandoSesion }"
+      >
+        {{ iniciandoSesion ? 'Iniciando...' : 'Iniciar' }}
+      </button>
     </form>
   </div>
 </template>
@@ -23,6 +29,7 @@ const router = useRouter()
 const usuario = ref('')
 const latitud = ref(null)
 const longitud = ref(null)
+const iniciandoSesion = ref(false)
 
 onMounted(() => {
   // Verificar si ya está autenticado
@@ -58,10 +65,18 @@ onMounted(() => {
 const logoSrc = `${import.meta.env.BASE_URL}icons/icon-192.png`
 
 async function iniciarSesion() {
+  // Evitar múltiples clics simultáneos
+  if (iniciandoSesion.value) {
+    console.log('Ya se está iniciando sesión, ignorando clic adicional')
+    return
+  }
+  
   if (!usuario.value) {
     Swal.fire({ icon: 'warning', title: 'Error', text: 'Por favor ingresa tu usuario.' })
     return
   }
+  
+  iniciandoSesion.value = true
 
   // Siempre pedir ubicación en cada intento
   if (navigator.geolocation) {
@@ -78,6 +93,7 @@ async function iniciarSesion() {
             router.push('/menu')
           } else {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Credenciales incorrectas.' })
+            iniciandoSesion.value = false
           }
         } catch (error) {
           console.error(error)
@@ -88,6 +104,7 @@ async function iniciarSesion() {
           } else {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Error al conectar con el servidor.' })
           }
+          iniciandoSesion.value = false
         }
       },
       (error) => {
@@ -96,6 +113,7 @@ async function iniciarSesion() {
         } else {
           Swal.fire({ icon: 'error', title: 'Error al obtener la ubicación', text: 'Error al obtener la ubicación: ' + error.message })
         }
+        iniciandoSesion.value = false
       },
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     )

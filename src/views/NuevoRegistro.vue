@@ -1,5 +1,13 @@
 <template>
   <div class="nuevo-registro-container">
+    <!-- Spinner de carga para modo automático -->
+    <div v-if="cargandoAutomatico" class="spinner-overlay">
+      <div class="spinner-container">
+        <div class="spinner"></div>
+        <p class="spinner-text">Cargando datos...</p>
+      </div>
+    </div>
+    
     <h1 class="titulo">{{ pasoActual > 1 ? 'Menu de pasos' : 'Nuevo Registro' }}</h1>
     
     <div v-if="pasoActual > 1 && folioPisa" class="os-folio-header">
@@ -98,8 +106,8 @@
     
     <!-- Contenedor de pasos -->
     <div class="pasos-contenedor">
-      <!-- Paso 1: Validación -->
-      <div v-if="pasoActual === 1" class="paso-contenido paso-contenido-scroll">
+      <!-- Paso 1: Validación (solo mostrar si no es modo automático) -->
+      <div v-if="pasoActual === 1 && !esModoAutomatico" class="paso-contenido paso-contenido-scroll">
         <div class="tarjeta">
           <h2>Validación de Orden</h2>
           
@@ -173,7 +181,7 @@
                 <font-awesome-icon icon="crosshairs" /> Precisas
               </span>
               <span v-else-if="estadoCoordenadas === 'error'" class="indicador-estado">
-                <font-awesome-icon icon="exclamation-triangle" /> Error
+                <font-awesome-icon icon="exclamation-triangle" />
               </span>
             </span>
           </div>
@@ -309,14 +317,12 @@
               <input type="text" id="numero" v-model="domicilio.numero" placeholder="Ingrese el número" maxlength="7" pattern="[0-9]*" inputmode="numeric" @input="domicilio.numero = $event.target.value.replace(/[^0-9]/g, '').slice(0, 7).toUpperCase()" />
             </div>
             
+            <!-- Foto de Fachada -->
             <div class="campo-formulario foto-fachada">
               <label>Foto de Fachada:</label>
               <div class="contenedor-foto">
                 <img v-if="domicilio.tieneFoto" :src="domicilio.fotoFachada" alt="Foto de fachada" class="preview-foto" />
-                <button type="button" class="boton-foto" @click="tomarFoto">
-                  {{ domicilio.tieneFoto ? 'Cambiar foto' : 'Subir foto' }}
-                </button>
-                <input type="file" ref="inputFoto" accept="image/*" capture="environment" style="display: none" @change="procesarFoto" />
+                <button v-if="soporteWebcam" type="button" class="boton-foto" @click="() => abrirWebcamModal('fachada')" style="margin-left:8px;">Usar cámara directa</button>
               </div>
             </div>
           </div>
@@ -352,14 +358,12 @@
               </select>
             </div>
             
+            <!-- Foto OS -->
             <div class="campo-formulario foto-fachada">
               <label>Fotografía OS:</label>
               <div class="contenedor-foto">
                 <img v-if="servicio.tieneFotoOS" :src="servicio.fotoOS" alt="Fotografía OS" class="preview-foto" />
-                <button type="button" class="boton-foto" @click="tomarFotoOS">
-                  {{ servicio.tieneFotoOS ? 'Cambiar foto' : 'Subir foto' }}
-                </button>
-                <input type="file" ref="inputFotoOS" accept="image/*" capture="environment" style="display: none" @change="procesarFotoOS" />
+                <button v-if="soporteWebcam" type="button" class="boton-foto" @click="() => abrirWebcamModal('os')" style="margin-left:8px;">Usar cámara directa</button>
               </div>
             </div>
           </div>
@@ -375,25 +379,21 @@
               </select>
             </div>
             
+            <!-- Foto ONT -->
             <div class="campo-formulario foto-fachada">
               <label>Fotografía ONT/Modem:</label>
               <div class="contenedor-foto">
                 <img v-if="ont.tieneFotoONT" :src="ont.fotoONT" alt="Fotografía ONT/Modem" class="preview-foto" />
-                <button type="button" class="boton-foto" @click="tomarFotoONT">
-                  {{ ont.tieneFotoONT ? 'Cambiar foto' : 'Subir foto' }}
-                </button>
-                <input type="file" ref="inputFotoONT" accept="image/*" capture="environment" style="display: none" @change="procesarFotoONT" />
+                <button v-if="soporteWebcam" type="button" class="boton-foto" @click="() => abrirWebcamModal('ont')" style="margin-left:8px;">Usar cámara directa</button>
               </div>
             </div>
             
+            <!-- Foto Serie ONT -->
             <div class="campo-formulario foto-fachada">
               <label>Fotografía no. serie ONT/Modem:</label>
               <div class="contenedor-foto">
                 <img v-if="ont.tieneFotoSerieONT" :src="ont.fotoSerieONT" alt="Fotografía no. serie ONT/Modem" class="preview-foto" />
-                <button type="button" class="boton-foto" @click="tomarFotoSerieONT">
-                  {{ ont.tieneFotoSerieONT ? 'Cambiar foto' : 'Subir foto' }}
-                </button>
-                <input type="file" ref="inputFotoSerieONT" accept="image/*" capture="environment" style="display: none" @change="procesarFotoSerieONT" />
+                <button v-if="soporteWebcam" type="button" class="boton-foto" @click="() => abrirWebcamModal('serieONT')" style="margin-left:8px;">Usar cámara directa</button>
               </div>
             </div>
           </div>
@@ -454,7 +454,7 @@
                     <font-awesome-icon icon="crosshairs" /> Precisas
                   </span>
                   <span v-else-if="estadoCoordenadasTerminal === 'error'" class="indicador-estado">
-                    <font-awesome-icon icon="exclamation-triangle" /> Error
+                    <font-awesome-icon icon="exclamation-triangle" />
                   </span>
                 </span>
               </div>
@@ -471,30 +471,83 @@
                 </span>
               </div>
 
+              <!-- Foto Terminal -->
               <div class="campo-formulario foto-fachada">
                 <label>Foto Terminal:</label>
+                <div ref="webcamContainer">
+                  <div v-if="webcamModalVisible && webcamFotoTipo === 'terminal'" class="webcam-box">
+                    <h3 class="webcam-title">Capturar foto con cámara</h3>
+                    <video ref="webcamVideo" autoplay playsinline class="webcam-video"></video>
+                    <canvas ref="webcamCanvas" style="display:none;"></canvas>
+                    <div v-if="webcamError" class="mensaje-error">{{ webcamError }}</div>
+                    <div class="webcam-actions">
+                      <button @click="capturarFotoWebcam" class="boton-primario">Capturar</button>
+                      <button @click="cerrarWebcamModal" class="boton-secundario">Cancelar</button>
+                    </div>
+                  </div>
+                </div>
                 <div class="contenedor-foto">
                   <img v-if="terminal.tieneFotoTerminal" :src="terminal.fotoTerminal" alt="Foto Terminal" class="preview-foto" />
-                  <button type="button" class="boton-foto" @click="tomarFotoTerminal">
-                    {{ terminal.tieneFotoTerminal ? 'Cambiar foto' : 'Subir foto' }}
-                  </button>
-                  <input type="file" ref="inputFotoTerminal" accept="image/*" capture="environment" style="display: none" @change="procesarFotoTerminal" />
+                  <button v-if="soporteWebcam" type="button" class="boton-foto" @click="() => abrirWebcamModal('terminal')">Usar cámara directa</button>
                 </div>
               </div>
             </div>
           
           <!-- Botones de acción para todos los pasos -->
           <div class="acciones-menu">
-            <button @click="guardarPaso" class="boton-primario">Guardar</button>
+            <button 
+              @click="guardarPaso" 
+              class="boton-primario"
+              :disabled="botonGuardarDeshabilitado || guardandoPaso"
+              :class="{ 
+                'boton-deshabilitado': botonGuardarDeshabilitado,
+                'boton-procesando': guardandoPaso 
+              }"
+            >
+              {{ 
+                botonGuardarDeshabilitado ? 'Ya Guardado' : 
+                guardandoPaso ? 'Guardando...' : 'Guardar' 
+              }}
+            </button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+  <!-- Modal de webcam multiuso -->
+  <div v-if="webcamModalVisible" class="camera-modal-overlay">
+    <div class="camera-modal-content">
+      <h3>Capturar foto con cámara</h3>
+      <video ref="webcamVideo" autoplay playsinline style="width:100%;max-width:320px;"></video>
+      <canvas ref="webcamCanvas" style="display:none;"></canvas>
+      <div v-if="webcamError" class="mensaje-error">{{ webcamError }}</div>
+      <div style="margin-top:12px; display: flex; gap: 12px; justify-content: center;">
+        <button @click="capturarFotoWebcam" class="boton-primario">Capturar</button>
+        <button @click="cerrarWebcamModal" class="boton-secundario">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para permisos de ubicación -->
+  <div v-if="locationModalVisible" class="camera-modal-overlay">
+    <div class="camera-modal-content">
+      <h3>Permisos de Ubicación</h3>
+      <p style="color: #ccc; margin-bottom: 20px; text-align: center;">
+        Para completar el registro necesitamos acceder a tu ubicación GPS.
+      </p>
+      <div v-if="locationError" class="mensaje-error">{{ locationError }}</div>
+      <div style="margin-top:12px; display: flex; gap: 12px; justify-content: center;">
+        <button @click="solicitarPermisosUbicacion" class="boton-primario" :disabled="solicitandoPermisos">
+          {{ solicitandoPermisos ? 'Solicitando...' : 'Permitir Ubicación' }}
+        </button>
+        <button @click="cerrarLocationModal" class="boton-secundario">Cancelar</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import api, { getOntOptions } from '@/api/coordi'
 import Swal from 'sweetalert2'
@@ -525,6 +578,19 @@ const ordenInfo = ref({
 })
 const registroId = ref(null)
 const validacionEnProceso = ref(false) // Flag para evitar múltiples validaciones simultáneas
+const esModoAutomatico = ref(false) // Flag para modo automático desde tabla incompletas
+const cargandoAutomatico = ref(false) // Flag para mostrar spinner en modo automático
+
+// Estado para controlar el botón de guardar
+const botonGuardarDeshabilitado = ref(false)
+const guardandoPaso = ref(false) // Nuevo estado para evitar múltiples clics
+
+// Estados para evitar spam en botones de foto
+const tomandoFotoFachada = ref(false)
+const tomandoFotoOS = ref(false)
+const tomandoFotoONT = ref(false)
+const tomandoFotoSerieONT = ref(false)
+const tomandoFotoTerminal = ref(false)
 
 // Estado para el menú de pasos
 const pasosCompletados = ref({
@@ -1146,6 +1212,71 @@ onMounted(() => {
   startWatchingLocation()
   cargarOpcionesIniciales()
   
+  // Verificar si hay parámetros en la URL para pre-cargar datos
+  const urlParams = new URLSearchParams(window.location.search)
+  const folioFromUrl = urlParams.get('folio')
+  const telefonoFromUrl = urlParams.get('telefono')
+  const estatusFromUrl = urlParams.get('estatus')
+  const autoFromUrl = urlParams.get('auto')
+  
+  if (folioFromUrl && telefonoFromUrl) {
+    console.log('Datos pre-cargados desde URL:', { folio: folioFromUrl, telefono: telefonoFromUrl, estatus: estatusFromUrl, auto: autoFromUrl })
+    
+    // Pre-cargar los datos
+    folioPisa.value = folioFromUrl
+    telefono.value = telefonoFromUrl
+    
+    if (estatusFromUrl) {
+      estatus.value = estatusFromUrl
+    }
+    
+    // Si viene con estatus completada, validar automáticamente y pasar al menú de pasos
+    if (estatusFromUrl === 'completada') {
+      console.log('Estatus completada detectado, validando automáticamente...')
+      
+      // Si es auto=true, ir directamente al menú de pasos sin mostrar validación
+      if (autoFromUrl === 'true') {
+        console.log('Modo automático detectado, saltando validación...')
+        esModoAutomatico.value = true
+        cargandoAutomatico.value = true
+        setTimeout(async () => {
+          try {
+            // Validar la orden en segundo plano
+            await validarOrden()
+            if (ordenValidada.value) {
+              // Cargar estado de pasos y datos del registro
+              await cargarEstadoPasos()
+              await cargarDatosRegistro()
+              
+              // Ir directamente al menú de pasos
+              pasoActual.value = 2
+              pasoSeleccionado.value = 'domicilio'
+            }
+          } catch (error) {
+            console.error('Error en validación automática:', error)
+          } finally {
+            cargandoAutomatico.value = false
+          }
+        }, 500)
+      } else {
+        // Modo normal: mostrar validación y luego pasar al menú
+        setTimeout(async () => {
+          try {
+            await validarOrden()
+            if (ordenValidada.value) {
+              // Cargar estado de pasos y pasar al menú
+              await cargarEstadoPasos()
+              pasoActual.value = 2
+              pasoSeleccionado.value = 'domicilio'
+            }
+          } catch (error) {
+            console.error('Error en validación automática:', error)
+          }
+        }, 1000)
+      }
+    }
+  }
+  
   // Precargar coordenadas para terminal en segundo plano
   setTimeout(() => {
     console.log('Precargando coordenadas para terminal...')
@@ -1156,6 +1287,52 @@ onMounted(() => {
 // Detener seguimiento cuando el componente se desmonta
 onUnmounted(() => {
   stopWatchingLocation()
+})
+
+// Watchers para actualizar el estado del botón de guardar
+watch(pasoSeleccionado, () => {
+  actualizarEstadoBotonGuardar()
+})
+
+// Watchers para campos del paso domicilio
+watch([selectedDivision, selectedArea, selectedCope, selectedEstado, selectedCiudad, selectedColonia], () => {
+  if (pasoSeleccionado.value === 'domicilio') {
+    actualizarEstadoBotonGuardar()
+  }
+})
+
+watch([() => domicilio.calle, () => domicilio.numero, () => domicilio.codigoPostal, () => domicilio.tieneFoto], () => {
+  if (pasoSeleccionado.value === 'domicilio') {
+    actualizarEstadoBotonGuardar()
+  }
+})
+
+// Watchers para campos del paso servicio
+watch([() => servicio.distrito, () => servicio.tecnologia, () => servicio.tipoInstalacion, () => servicio.metraje, () => servicio.tieneFotoOS], () => {
+  if (pasoSeleccionado.value === 'servicio') {
+    actualizarEstadoBotonGuardar()
+  }
+})
+
+// Watchers para campos del paso ont
+watch([() => ont.ont, () => ont.tieneFotoONT, () => ont.tieneFotoSerieONT], () => {
+  if (pasoSeleccionado.value === 'ont') {
+    actualizarEstadoBotonGuardar()
+  }
+})
+
+// Watchers para campos del paso cliente
+watch([() => cliente.nombreTitular, () => cliente.apellidoPaternoTitular, () => cliente.apellidoMaternoTitular, () => cliente.personaRecibe, () => cliente.telefonoCliente], () => {
+  if (pasoSeleccionado.value === 'cliente') {
+    actualizarEstadoBotonGuardar()
+  }
+})
+
+// Watchers para campos del paso terminal
+watch([() => terminal.puerto, () => terminal.terminalTexto, () => terminal.latitud, () => terminal.longitud, () => terminal.tieneFotoTerminal], () => {
+  if (pasoSeleccionado.value === 'terminal') {
+    actualizarEstadoBotonGuardar()
+  }
 })
 
 // Método para validar la orden
@@ -1290,11 +1467,21 @@ const siguientePaso = async () => {
         return
       }
       
-      // Guardar las coordenadas actuales del paso de validación
-      if (latitudValidacion.value && longitudValidacion.value) {
-        console.log('Coordenadas guardadas en validación:', 
-          latitudValidacion.value.toFixed(6), 
-          longitudValidacion.value.toFixed(6))
+      // Verificar permisos de ubicación después de validar campos
+      const permisosOtorgados = await verificarPermisosUbicacion()
+      if (!permisosOtorgados) {
+        abrirLocationModal()
+        return
+      }
+      
+      // Intentar obtener coordenadas actuales
+      try {
+        const coordenadasActuales = await obtenerCoordenadasActuales()
+        latitudValidacion.value = coordenadasActuales.latitude
+        longitudValidacion.value = coordenadasActuales.longitude
+        console.log('Coordenadas de validación obtenidas:', coordenadasActuales)
+      } catch (error) {
+        console.log('No se pudieron obtener coordenadas actuales, usando coordenadas registradas')
       }
       
       // Validar la orden antes de continuar
@@ -1407,6 +1594,9 @@ const seleccionarPaso = async (paso) => {
     console.log('Paso ONT seleccionado, cargando opciones de ONT...')
     cargarOpcionesOnt()
   }
+  
+  // Actualizar el estado del botón de guardar al cambiar de paso
+  actualizarEstadoBotonGuardar()
 }
 
 // Método para obtener el estado de un paso (para estilos)
@@ -1417,13 +1607,90 @@ const getEstadoPaso = (paso) => {
   return pasoSeleccionado.value === paso ? 'activo' : ''
 }
 
+// Función para verificar si todos los campos del paso actual están completos
+const verificarCamposCompletos = () => {
+  switch (pasoSeleccionado.value) {
+    case 'domicilio':
+      return selectedDivision.value && 
+             selectedArea.value && 
+             selectedCope.value && 
+             selectedEstado.value && 
+             selectedCiudad.value && 
+             selectedColonia.value && 
+             domicilio.calle && 
+             domicilio.numero && 
+             domicilio.codigoPostal &&
+             domicilio.tieneFoto
+    
+    case 'servicio':
+      return servicio.distrito && 
+             servicio.tecnologia && 
+             servicio.tipoInstalacion && 
+             servicio.metraje &&
+             servicio.tieneFotoOS
+    
+    case 'ont':
+      return ont.tieneFotoONT && ont.tieneFotoSerieONT
+    
+    case 'cliente':
+      return cliente.nombreTitular && 
+             cliente.apellidoPaternoTitular && 
+             cliente.apellidoMaternoTitular && 
+             cliente.personaRecibe && 
+             cliente.telefonoCliente
+    
+    case 'terminal':
+      return terminal.puerto && 
+             terminal.terminalTexto && 
+             terminal.tieneFotoTerminal
+    
+    default:
+      return false
+  }
+}
+
+// Función para actualizar el estado del botón de guardar
+const actualizarEstadoBotonGuardar = () => {
+  // Solo deshabilitar si el paso ya está completado, no si está completo
+  botonGuardarDeshabilitado.value = pasosCompletados.value[pasoSeleccionado.value] === true
+}
+
 // Método para guardar el paso actual
 const guardarPaso = async () => {
-  try {
-    // Validar campos según el paso seleccionado
-    if (!(await validarCamposPaso())) {
-      return
-    }
+  // Evitar múltiples clics simultáneos
+  if (guardandoPaso.value) {
+    console.log('Ya se está guardando, ignorando clic adicional')
+    return
+  }
+  
+  guardandoPaso.value = true
+  
+      try {
+      // PRIMERO: Validar campos según el paso seleccionado (sin coordenadas)
+      if (!(await validarCamposPaso())) {
+        guardandoPaso.value = false
+        return
+      }
+      
+      // SEGUNDO: Verificar permisos de ubicación
+      const permisosOtorgados = await verificarPermisosUbicacion()
+      if (!permisosOtorgados) {
+        abrirLocationModal()
+        guardandoPaso.value = false
+        return
+      }
+      
+      // TERCERO: Intentar obtener coordenadas actuales según el paso
+      if (pasoSeleccionado.value === 'terminal') {
+        try {
+          const coordenadasActuales = await obtenerCoordenadasActuales()
+          terminal.latitud = coordenadasActuales.latitude
+          terminal.longitud = coordenadasActuales.longitude
+          console.log('Coordenadas del terminal obtenidas:', coordenadasActuales)
+        } catch (error) {
+          console.log('No se pudieron obtener coordenadas actuales del terminal, usando coordenadas registradas')
+        }
+      }
     
     // Preparar datos para enviar al servidor
     const datos = prepararDatos()
@@ -1436,6 +1703,9 @@ const guardarPaso = async () => {
     if (response.data && response.data.mensaje) {
       // Marcar el paso como completado
       pasosCompletados.value[pasoSeleccionado.value] = true
+      
+      // Actualizar el estado del botón de guardar
+      actualizarEstadoBotonGuardar()
       
       // Mostrar mensaje de éxito
       await Swal.fire({ icon: 'success', title: 'Éxito', text: `Paso ${pasoSeleccionado.value} guardado correctamente: ${response.data.mensaje}` })
@@ -1469,6 +1739,9 @@ const guardarPaso = async () => {
   } catch (error) {
     console.error('Error al guardar paso:', error)
     await Swal.fire({ icon: 'warning', title: 'Atención', text: `Error al guardar paso: ${error.response?.data?.mensaje || error.message || 'Error desconocido'}` })
+  } finally {
+    // Siempre resetear el estado de guardando
+    guardandoPaso.value = false
   }
 }
 
@@ -1534,13 +1807,7 @@ const validarCamposPaso = async () => {
       break
       
     case 'ont':
-      if (!ont.ont) {
-        mensaje = 'Por favor seleccione o ingrese el modelo de ONT/Modem'
-        valido = false
-      } else if (ont.ont.length > 30) {
-        mensaje = 'El ONT debe tener máximo 30 caracteres'
-        valido = false
-      }
+      // Solo validar las fotos, no el campo ont.ont
       if (!ont.tieneFotoONT) {
         mensaje = 'Por favor tome una foto del ONT/Modem'
         valido = false
@@ -1585,7 +1852,7 @@ const validarCamposPaso = async () => {
       break
       
     case 'terminal':
-      if (!terminal.puerto || !terminal.terminalTexto || terminal.latitud === null || terminal.longitud === null) {
+      if (!terminal.puerto || !terminal.terminalTexto) {
         mensaje = 'Por favor complete todos los campos obligatorios de la terminal'
         valido = false
       } else {
@@ -1824,10 +2091,32 @@ const inputFotoPuerto = ref(null)
 
 // Método para activar la cámara para foto de fachada
 const tomarFoto = async () => {
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    inputFoto.value.click()
-  } else {
-    await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+  // Evitar múltiples clics simultáneos
+  if (tomandoFotoFachada.value) {
+    console.log('Ya se está tomando foto de fachada, ignorando clic adicional')
+    return
+  }
+  
+  tomandoFotoFachada.value = true
+  
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      inputFoto.value.click()
+      
+      // Timeout de seguridad: si después de 10 segundos no se ha procesado foto, resetear estado
+      setTimeout(() => {
+        if (tomandoFotoFachada.value) {
+          console.log('Timeout: reseteando estado de foto fachada')
+          tomandoFotoFachada.value = false
+        }
+      }, 10000)
+    } else {
+      await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+      tomandoFotoFachada.value = false
+    }
+  } catch (error) {
+    console.error('Error al tomar foto de fachada:', error)
+    tomandoFotoFachada.value = false
   }
 }
 
@@ -1846,14 +2135,42 @@ const procesarFoto = (event) => {
       console.log('Foto fachada convertida a base64')
     })
   }
+  
+  // Resetear el estado de toma de foto
+  tomandoFotoFachada.value = false
+  
+  // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
+  event.target.value = ''
 }
 
 // Método para activar la cámara para foto OS
 const tomarFotoOS = async () => {
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    inputFotoOS.value.click()
-  } else {
-    await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+  // Evitar múltiples clics simultáneos
+  if (tomandoFotoOS.value) {
+    console.log('Ya se está tomando foto OS, ignorando clic adicional')
+    return
+  }
+  
+  tomandoFotoOS.value = true
+  
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      inputFotoOS.value.click()
+      
+      // Timeout de seguridad: si después de 10 segundos no se ha procesado foto, resetear estado
+      setTimeout(() => {
+        if (tomandoFotoOS.value) {
+          console.log('Timeout: reseteando estado de foto OS')
+          tomandoFotoOS.value = false
+        }
+      }, 10000)
+    } else {
+      await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+      tomandoFotoOS.value = false
+    }
+  } catch (error) {
+    console.error('Error al tomar foto OS:', error)
+    tomandoFotoOS.value = false
   }
 }
 
@@ -1872,6 +2189,12 @@ const procesarFotoOS = (event) => {
       console.log('Foto OS convertida a base64')
     })
   }
+  
+  // Resetear el estado de toma de foto
+  tomandoFotoOS.value = false
+  
+  // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
+  event.target.value = ''
 }
 
 // Método para activar la cámara para foto INE
@@ -1902,10 +2225,32 @@ const procesarFotoINE = (event) => {
 
 // Método para activar la cámara para foto ONT/Modem
 const tomarFotoONT = async () => {
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    inputFotoONT.value.click()
-  } else {
-    await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+  // Evitar múltiples clics simultáneos
+  if (tomandoFotoONT.value) {
+    console.log('Ya se está tomando foto ONT, ignorando clic adicional')
+    return
+  }
+  
+  tomandoFotoONT.value = true
+  
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      inputFotoONT.value.click()
+      
+      // Timeout de seguridad: si después de 10 segundos no se ha procesado foto, resetear estado
+      setTimeout(() => {
+        if (tomandoFotoONT.value) {
+          console.log('Timeout: reseteando estado de foto ONT')
+          tomandoFotoONT.value = false
+        }
+      }, 10000)
+    } else {
+      await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+      tomandoFotoONT.value = false
+    }
+  } catch (error) {
+    console.error('Error al tomar foto ONT:', error)
+    tomandoFotoONT.value = false
   }
 }
 
@@ -1924,14 +2269,42 @@ const procesarFotoONT = (event) => {
       console.log('Foto ONT convertida a base64')
     })
   }
+  
+  // Resetear el estado de toma de foto
+  tomandoFotoONT.value = false
+  
+  // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
+  event.target.value = ''
 }
 
 // Método para activar la cámara para foto de serie ONT/Modem
 const tomarFotoSerieONT = async () => {
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    inputFotoSerieONT.value.click()
-  } else {
-    await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+  // Evitar múltiples clics simultáneos
+  if (tomandoFotoSerieONT.value) {
+    console.log('Ya se está tomando foto serie ONT, ignorando clic adicional')
+    return
+  }
+  
+  tomandoFotoSerieONT.value = true
+  
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      inputFotoSerieONT.value.click()
+      
+      // Timeout de seguridad: si después de 10 segundos no se ha procesado foto, resetear estado
+      setTimeout(() => {
+        if (tomandoFotoSerieONT.value) {
+          console.log('Timeout: reseteando estado de foto serie ONT')
+          tomandoFotoSerieONT.value = false
+        }
+      }, 10000)
+    } else {
+      await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+      tomandoFotoSerieONT.value = false
+    }
+  } catch (error) {
+    console.error('Error al tomar foto serie ONT:', error)
+    tomandoFotoSerieONT.value = false
   }
 }
 
@@ -1950,6 +2323,12 @@ const procesarFotoSerieONT = (event) => {
       console.log('Foto serie ONT convertida a base64')
     })
   }
+  
+  // Resetear el estado de toma de foto
+  tomandoFotoSerieONT.value = false
+  
+  // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
+  event.target.value = ''
 }
 
 // Función para convertir un archivo a base64
@@ -1964,10 +2343,32 @@ const convertirFileABase64 = (file, callback) => {
 
 // Método para activar la cámara para foto Terminal
 const tomarFotoTerminal = async () => {
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    inputFotoTerminal.value.click()
-  } else {
-    await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+  // Evitar múltiples clics simultáneos
+  if (tomandoFotoTerminal.value) {
+    console.log('Ya se está tomando foto terminal, ignorando clic adicional')
+    return
+  }
+  
+  tomandoFotoTerminal.value = true
+  
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      inputFotoTerminal.value.click()
+      
+      // Timeout de seguridad: si después de 10 segundos no se ha procesado foto, resetear estado
+      setTimeout(() => {
+        if (tomandoFotoTerminal.value) {
+          console.log('Timeout: reseteando estado de foto terminal')
+          tomandoFotoTerminal.value = false
+        }
+      }, 10000)
+    } else {
+      await Swal.fire({ icon: 'error', title: 'Cámara no soportada', text: 'Tu dispositivo no soporta el acceso a la cámara' })
+      tomandoFotoTerminal.value = false
+    }
+  } catch (error) {
+    console.error('Error al tomar foto terminal:', error)
+    tomandoFotoTerminal.value = false
   }
 }
 
@@ -1986,6 +2387,12 @@ const procesarFotoTerminal = (event) => {
       console.log('Foto Terminal convertida a base64')
     })
   }
+  
+  // Resetear el estado de toma de foto
+  tomandoFotoTerminal.value = false
+  
+  // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
+  event.target.value = ''
 }
 
 // Método para probar la conexión API
@@ -2341,6 +2748,200 @@ const fechaMonterrey = dayjs().tz('America/Monterrey').format('YYYY-MM-DD HH:mm:
 // Usar fechaMonterrey en lugar de new Date().toISOString().slice(0, 19).replace('T', ' ')
 // Ejemplo:
 // Fecha_Coordiapp: fechaMonterrey
+
+// --- WEBCAM MULTIUSO PARA FOTOS ---
+const webcamModalVisible = ref(false)
+const webcamVideo = ref(null)
+const webcamCanvas = ref(null)
+const webcamStream = ref(null)
+const webcamError = ref('')
+const webcamFotoTipo = ref('') // 'fachada', 'os', 'ont', 'serieONT', 'terminal'
+
+const soporteWebcam = typeof navigator !== 'undefined' && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+
+const webcamContainer = ref(null)
+
+function abrirWebcamModal(tipo) {
+  webcamError.value = ''
+  webcamFotoTipo.value = tipo
+  webcamModalVisible.value = true
+  nextTick(() => {
+    iniciarWebcam()
+    // Scroll automático al contenedor de la cámara
+    if (webcamContainer.value) {
+      webcamContainer.value.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  })
+}
+
+async function iniciarWebcam() {
+  try {
+    if (webcamVideo.value) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      webcamVideo.value.srcObject = stream
+      webcamStream.value = stream
+    }
+  } catch (e) {
+    webcamError.value = 'No se pudo acceder a la cámara: ' + e.message
+  }
+}
+
+function cerrarWebcamModal() {
+  webcamModalVisible.value = false
+  detenerWebcam()
+}
+
+function detenerWebcam() {
+  if (webcamStream.value) {
+    webcamStream.value.getTracks().forEach(track => track.stop())
+    webcamStream.value = null
+  }
+}
+
+function capturarFotoWebcam() {
+  if (!webcamVideo.value || !webcamCanvas.value) return
+  const video = webcamVideo.value
+  const canvas = webcamCanvas.value
+  canvas.width = video.videoWidth
+  canvas.height = video.videoHeight
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+  const base64 = canvas.toDataURL('image/jpeg')
+  // Asignar la foto al campo correspondiente
+  switch (webcamFotoTipo.value) {
+    case 'fachada':
+      domicilio.fotoFachada = base64
+      domicilio.fotoFachadaBase64 = base64
+      domicilio.tieneFoto = true
+      // Disparar validación reactiva
+      actualizarEstadoBotonGuardar && actualizarEstadoBotonGuardar()
+      break
+    case 'os':
+      servicio.fotoOS = base64
+      servicio.fotoOSBase64 = base64
+      servicio.tieneFotoOS = true
+      break
+    case 'ont':
+      ont.fotoONT = base64
+      ont.fotoONTBase64 = base64
+      ont.tieneFotoONT = true
+      break
+    case 'serieONT':
+      ont.fotoSerieONT = base64
+      ont.fotoSerieONTBase64 = base64
+      ont.tieneFotoSerieONT = true
+      break
+    case 'terminal':
+      terminal.fotoTerminal = base64
+      terminal.fotoTerminalBase64 = base64
+      terminal.tieneFotoTerminal = true
+      break
+  }
+  cerrarWebcamModal()
+}
+
+onUnmounted(() => {
+  detenerWebcam()
+})
+// --- FIN WEBCAM MULTIUSO ---
+
+// --- GEOLOCALIZACIÓN ---
+const locationModalVisible = ref(false)
+const locationError = ref('')
+const solicitandoPermisos = ref(false)
+
+// Función para verificar permisos de ubicación
+const verificarPermisosUbicacion = async () => {
+  if (!navigator.geolocation) return false
+  
+  try {
+    if (navigator.permissions) {
+      const status = await navigator.permissions.query({ name: 'geolocation' })
+      return status.state === 'granted'
+    }
+    // Fallback: intentar obtener coordenadas directamente
+    await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 1000 })
+    })
+    return true
+  } catch (error) {
+    return false
+  }
+}
+
+// Función para obtener coordenadas actuales
+const obtenerCoordenadasActuales = () => {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Timeout'))
+    }, 5000)
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        clearTimeout(timeout)
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        })
+      },
+      (error) => {
+        clearTimeout(timeout)
+        reject(error)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      }
+    )
+  })
+}
+
+const solicitarPermisosUbicacion = async () => {
+  solicitandoPermisos.value = true
+  locationError.value = ''
+  
+  try {
+    const coordenadas = await obtenerCoordenadasActuales()
+    
+    // Actualizar coordenadas según el paso
+    if (pasoSeleccionado.value === 'terminal') {
+      terminal.latitud = coordenadas.latitude
+      terminal.longitud = coordenadas.longitude
+    } else {
+      latitudValidacion.value = coordenadas.latitude
+      longitudValidacion.value = coordenadas.longitude
+    }
+    
+    cerrarLocationModal()
+    
+    // Continuar con el flujo
+    if (pasoActual.value === 1) {
+      siguientePaso()
+    } else {
+      guardarPaso()
+    }
+    
+  } catch (error) {
+    console.error('Error al obtener ubicación:', error)
+    locationError.value = 'Error al obtener ubicación. Verifica que el GPS esté activado.'
+  } finally {
+    solicitandoPermisos.value = false
+  }
+}
+
+const cerrarLocationModal = () => {
+  locationModalVisible.value = false
+  locationError.value = ''
+  solicitandoPermisos.value = false
+}
+
+const abrirLocationModal = () => {
+  locationError.value = ''
+  locationModalVisible.value = true
+}
+// --- FIN GEOLOCALIZACIÓN ---
 </script>
 
 <style scoped>
@@ -2348,6 +2949,46 @@ const fechaMonterrey = dayjs().tz('America/Monterrey').format('YYYY-MM-DD HH:mm:
 :root {
   --primary-dark: #083378; /* Versión más oscura del color primario */
   --border-color: #e0e0e0;
+}
+
+/* Spinner de carga */
+.spinner-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.spinner-container {
+  text-align: center;
+  color: white;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid #a3ca38;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+.spinner-text {
+  font-size: 1.2rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -2622,6 +3263,46 @@ input:focus, select:focus {
 .boton-primario:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+}
+
+.boton-deshabilitado {
+  background-color: #6c757d !important;
+  color: #adb5bd !important;
+  cursor: not-allowed !important;
+  box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3) !important;
+}
+
+.boton-deshabilitado:hover {
+  background-color: #6c757d !important;
+  transform: none !important;
+}
+
+.boton-procesando {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+  cursor: not-allowed !important;
+  box-shadow: 0 2px 4px rgba(255, 193, 7, 0.3) !important;
+  position: relative;
+}
+
+.boton-procesando:hover {
+  background-color: #ffc107 !important;
+  transform: none !important;
+}
+
+.boton-procesando::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+  border: 2px solid transparent;
+  border-top-color: #212529;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .boton-secundario {
@@ -3038,5 +3719,60 @@ textarea:focus {
 .paso-contenido-scroll {
   overflow-y: auto;
   max-height: 80vh;
+}
+
+.webcam-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #181818;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+  padding: 20px 16px 16px 16px;
+  margin-bottom: 16px;
+  margin-top: 8px;
+}
+.webcam-title {
+  margin-bottom: 10px;
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+.webcam-video {
+  width: 320px;
+  max-width: 90vw;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+  background: #000;
+  margin-bottom: 12px;
+}
+.webcam-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.camera-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.camera-modal-content {
+  background: #222;
+  padding: 24px 16px 16px 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 320px;
+  max-width: 95vw;
 }
 </style>

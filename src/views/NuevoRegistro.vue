@@ -13,6 +13,10 @@
     <div v-if="pasoActual > 1 && folioPisa" class="os-folio-header">
       <span class="os-label">Folio :</span>
       <span class="os-folio">{{ folioPisa }}</span>
+      <template v-if="tipoTareaTexto">
+        <span class="os-label tipo-tarea-label">Tipo de Tarea:</span>
+        <span class="os-tipo-tarea">{{ tipoTareaTexto }}</span>
+      </template>
     </div>
     
     <!-- Menú de navegación de pasos -->
@@ -68,6 +72,23 @@
           </div>
           <div class="paso-nombre">ONT/Modem</div>
           <div class="paso-estado" :class="getEstadoPaso('ont')"></div>
+        </div>
+        <!-- Nuevo paso ONT Cobre solo para migración -->
+        <div 
+          v-if="tipoTarea === 4"
+          class="paso-card" 
+          :class="{ 
+            'activo': pasoSeleccionado === 'ontCobre',
+            'completado': pasosCompletados.ontCobre,
+            'deshabilitado': pasosCompletados.ontCobre
+          }"
+          @click="seleccionarPaso('ontCobre')"
+        >
+          <div class="paso-icono">
+            <font-awesome-icon icon="microchip" />
+          </div>
+          <div class="paso-nombre">ONT Cobre</div>
+          <div class="paso-estado" :class="getEstadoPaso('ontCobre')"></div>
         </div>
         
         <div 
@@ -309,7 +330,7 @@
             
             <div class="campo-formulario">
               <label for="calle">Calle:</label>
-              <input type="text" id="calle" v-model="domicilio.calle" placeholder="Ingrese la calle" maxlength="15" @input="domicilio.calle = $event.target.value.slice(0, 15).toUpperCase()" />
+              <input type="text" id="calle" v-model="domicilio.calle" placeholder="Ingrese la calle" maxlength="30" @input="domicilio.calle = $event.target.value.slice(0, 30).toUpperCase()" />
             </div>
             
             <div class="campo-formulario">
@@ -357,7 +378,17 @@
                 <option value="AEREA">AEREA</option>
               </select>
             </div>
-            
+            <!-- Nuevos campos solo para tipoTarea = 3 (Queja) -->
+            <div v-if="tipoTarea === 3">
+              <div class="campo-formulario">
+                <label for="codigoLiquidacion">Código de liquidación:</label>
+                <input type="text" id="codigoLiquidacion" v-model="servicio.codigoLiquidacion" maxlength="7" placeholder="Máx. 7 caracteres" />
+              </div>
+              <div class="campo-formulario">
+                <label for="descripcionQueja">Descripción de la Queja:</label>
+                <textarea id="descripcionQueja" v-model="servicio.descripcionQueja" rows="2" maxlength="50" placeholder="Describe la queja (máx. 50 caracteres)"></textarea>
+              </div>
+            </div>
             <!-- Foto OS -->
             <div class="campo-formulario foto-fachada">
               <label>Fotografía OS:</label>
@@ -371,12 +402,49 @@
           <!-- ONT/Modem -->
           <div v-if="pasoSeleccionado === 'ont' && !pasosCompletados.ont" class="paso-detalle">
             <h2>Información de ONT/Modem</h2>
-            <div class="campo-formulario">
+            <!-- Pregunta si se usará módem nuevo (solo para tipoTarea=2) -->
+            <div v-if="(tipoTarea === 2 || tipoTarea === 3) && usarMismoModem === null" class="campo-formulario">
+              <p class="mensaje-info" style="text-align: center; margin-bottom: 20px;">
+                ¿Se usará módem nuevo?
+              </p>
+              <div style="display: flex; justify-content: center; gap: 12px;">
+                <button @click="() => { usarMismoModem = false; preguntaModemMostrada = true; }" class="boton-primario">No</button>
+                <button @click="() => { usarMismoModem = true; preguntaModemMostrada = true; }" class="boton-primario">Sí</button>
+              </div>
+            </div>
+            <!-- Si es tipoTarea=2 o 3 y se usará módem nuevo, solo campo de texto para ONT -->
+            <div v-else-if="(tipoTarea === 2 || tipoTarea === 3) && usarMismoModem === true" class="campo-formulario">
               <label for="ont">ONT:</label>
-              <select id="ont" v-model="ont.ont" class="select-estatus" @change="ont.ont = ont.ont ? ont.ont.toUpperCase() : ''">
-                <option value="">Seleccione una ONT</option>
-                <option v-for="option in ontOptions" :key="option" :value="option">{{ option }}</option>
-              </select>
+              <div class="ont-input-container">
+                <input 
+                  type="text"
+                  id="ont"
+                  v-model="ont.ont"
+                  @input="onOntInput"
+                  placeholder="Ingrese el número de ONT"
+                  class="form-control"
+                  maxlength="20"
+                />
+              </div>
+            </div>
+            <!-- Si es tipoTarea=2 o 3 y se usará el mismo módem, solo pide las fotos -->
+            <div v-else-if="(tipoTarea === 2 || tipoTarea === 3) && usarMismoModem === false">
+              <!-- No se muestra campo ONT, solo las fotos abajo -->
+            </div>
+            <!-- Otros casos: select normal -->
+            <div v-else class="campo-formulario">
+              <label for="ont">ONT:</label>
+              <div class="ont-input-container">
+                <select 
+                  id="ont" 
+                  v-model="ont.ont" 
+                  class="select-estatus" 
+                  @change="ont.ont = ont.ont ? ont.ont.toUpperCase() : ''"
+                >
+                  <option value="">Seleccione una ONT</option>
+                  <option v-for="option in ontOptions" :key="option" :value="option">{{ option }}</option>
+                </select>
+              </div>
             </div>
             
             <!-- Foto ONT -->
@@ -394,6 +462,29 @@
               <div class="contenedor-foto">
                 <img v-if="ont.tieneFotoSerieONT" :src="ont.fotoSerieONT" alt="Fotografía no. serie ONT/Modem" class="preview-foto" />
                 <button v-if="soporteWebcam" type="button" class="boton-foto" @click="() => abrirWebcamModal('serieONT')" style="margin-left:8px;">Usar cámara directa</button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- ONT Cobre (solo migración) -->
+          <div v-if="pasoSeleccionado === 'ontCobre' && !pasosCompletados.ontCobre && tipoTarea === 4" class="paso-detalle">
+            <h2>Información de ONT Cobre</h2>
+            <div class="campo-formulario">
+              <label for="ontCobreSerial">Número de serie ONT Cobre:</label>
+              <input type="text" id="ontCobreSerial" v-model="ont.ontCobreSerial" placeholder="Ingrese el número de serie" maxlength="30" />
+            </div>
+            <div class="campo-formulario foto-fachada">
+              <label>Foto frontal ONT Cobre:</label>
+              <div class="contenedor-foto">
+                <img v-if="ont.fotoFrontalCobre" :src="ont.fotoFrontalCobre" alt="Foto frontal ONT Cobre" class="preview-foto" />
+                <button v-if="soporteWebcam" type="button" class="boton-foto" @click="() => abrirWebcamModal('frontalCobre')" style="margin-left:8px;">Usar cámara directa</button>
+              </div>
+            </div>
+            <div class="campo-formulario foto-fachada">
+              <label>Foto trasera ONT Cobre:</label>
+              <div class="contenedor-foto">
+                <img v-if="ont.fotoTraseraCobre" :src="ont.fotoTraseraCobre" alt="Foto trasera ONT Cobre" class="preview-foto" />
+                <button v-if="soporteWebcam" type="button" class="boton-foto" @click="() => abrirWebcamModal('traseraCobre')" style="margin-left:8px;">Usar cámara directa</button>
               </div>
             </div>
           </div>
@@ -567,6 +658,8 @@ const folioPisa = ref('')
 const telefono = ref('')
 const estatus = ref('')
 const estatusActual = ref('') // Nueva variable para guardar el estatus actual de la orden
+const tipoTarea = ref(0) // Tipo numérico de la tarea (1=ALTA, 2=CAMBIO DOMICILIO, etc)
+const tipoTareaTexto = ref('') // Descripción del tipo de tarea
 const validando = ref(false)
 const procesando = ref(false) // Nueva variable para evitar múltiples clics
 const mensajeError = ref('')
@@ -597,9 +690,30 @@ const pasosCompletados = ref({
   domicilio: false,
   servicio: false,
   ont: false,
+  ontCobre: false,
   cliente: false,
   terminal: false
 })
+
+// Función para verificar modem en cambio de domicilio
+const verificarModemCambioDomicilio = async () => {
+  if (tipoTarea.value === 2 && !preguntaModemMostrada.value) {
+    const { isConfirmed } = await Swal.fire({
+      title: 'Cambio de Domicilio',
+      text: '¿Se usará el mismo módem o se hará un cambio?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Mismo Módem',
+      cancelButtonText: 'Cambiar Módem',
+      reverseButtons: true
+    })
+    
+    usarMismoModem.value = isConfirmed
+    preguntaModemMostrada.value = true
+    
+    console.log('Decisión de módem:', isConfirmed ? 'Usar mismo módem' : 'Cambiar módem')
+  }
+}
 
 // Obtener ID del técnico desde localStorage
 const obtenerIdTecnico = () => {
@@ -655,7 +769,9 @@ const servicio = reactive({
   tipoInstalacion: '',
   fotoOS: null,
   tieneFotoOS: false,
-  fotoOSBase64: null
+  fotoOSBase64: null,
+  codigoLiquidacion: '',
+  descripcionQueja: ''
 })
 
 const ont = reactive({
@@ -665,7 +781,11 @@ const ont = reactive({
   fotoONTBase64: null,
   fotoSerieONT: null,
   tieneFotoSerieONT: false,
-  fotoSerieONTBase64: null
+  fotoSerieONTBase64: null,
+  // ONT Cobre
+  ontCobreSerial: '',
+  fotoFrontalCobre: null,
+  fotoTraseraCobre: null
 })
 
   const cliente = reactive({
@@ -731,6 +851,10 @@ const ontOptions = ref([])
 const filteredOntOptions = ref([])
 const showOntDropdown = ref(false)
 const ontSearchTerm = ref('')
+
+// Variables para cambio de domicilio
+const usarMismoModem = ref(null) // null = no preguntado, true = mismo modem, false = nuevo modem
+const preguntaModemMostrada = ref(false)
 
 // Función para obtener coordenadas rápidas (aproximadas)
 const obtenerCoordenadasRapidas = () => {
@@ -925,15 +1049,19 @@ const cargarCoordenadasTerminal = async () => {
 
   try {
     // Intentar obtener coordenadas súper rápidas para terminal
-    console.log('Obteniendo coordenadas súper rápidas para terminal...')
-    const coordenadasSuperRapidas = await obtenerCoordenadasSuperRapidas()
+    console.log('Obteniendo coordenadas súper rápidas para terminal...');
+    const coordenadasSuperRapidas = await obtenerCoordenadasSuperRapidas();
     
     // Actualizar coordenadas del terminal inmediatamente
-    actualizarCoordenadasTerminal(coordenadasSuperRapidas.latitude, coordenadasSuperRapidas.longitude, coordenadasSuperRapidas.accuracy)
-    console.log('Coordenadas súper rápidas para terminal obtenidas:', coordenadasSuperRapidas)
+    actualizarCoordenadasTerminal(
+      coordenadasSuperRapidas.latitude,
+      coordenadasSuperRapidas.longitude,
+      coordenadasSuperRapidas.accuracy
+    );
+    console.log('Coordenadas súper rápidas para terminal obtenidas:', coordenadasSuperRapidas);
     
     // Guardar en caché del terminal
-    coordenadasCacheTerminal.value = coordenadasSuperRapidas
+    coordenadasCacheTerminal.value = coordenadasSuperRapidas;
     
     // Intentar obtener coordenadas precisas en segundo plano
     setTimeout(async () => {
@@ -990,7 +1118,7 @@ const actualizarCoordenadas = (latitud, longitud, precision = null) => {
     console.log('Debug - Coordenadas de terminal actualizadas:', terminal.latitud, terminal.longitud)
   }
   
-  // Actualizar estado y precisión solo para indicadores visuales (no se guardan)
+  // Actualizar estado y precisión solo para indicadores visuales
   if (precision !== null) {
     precisionCoordenadas.value = precision
     if (precision < 10) {
@@ -1082,10 +1210,14 @@ const seleccionarOnt = (ontValue) => {
 
 // Función para manejar el input del campo ONT
 const onOntInput = (event) => {
-  const value = event.target.value
-  ontSearchTerm.value = value
+  // Convertir a mayúsculas y eliminar espacios
+  const value = event.target.value.toUpperCase().trim()
   ont.ont = value
-  filtrarOpcionesOnt(value)
+  // Si es cambio de domicilio con nuevo modem, no necesitamos filtrar
+  if (tipoTarea.value !== 2 || usarMismoModem.value) {
+    ontSearchTerm.value = value
+    filtrarOpcionesOnt(value)
+  }
 }
 
 // Cargar el estado de los pasos desde el servidor
@@ -1218,6 +1350,18 @@ onMounted(() => {
   const telefonoFromUrl = urlParams.get('telefono')
   const estatusFromUrl = urlParams.get('estatus')
   const autoFromUrl = urlParams.get('auto')
+  const tipoFromUrl = urlParams.get('tipo')
+  const textoFromUrl = urlParams.get('texto')
+
+  // Si viene de la tabla de pruebas (con tipo y texto)
+  if (tipoFromUrl && textoFromUrl) {
+    tipoTarea.value = parseInt(tipoFromUrl)
+    tipoTareaTexto.value = textoFromUrl
+    // Ir directamente al menú de pasos
+    nextTick(() => {
+      pasoActual.value = 2
+    })
+  }
   
   if (folioFromUrl && telefonoFromUrl) {
     console.log('Datos pre-cargados desde URL:', { folio: folioFromUrl, telefono: telefonoFromUrl, estatus: estatusFromUrl, auto: autoFromUrl })
@@ -1576,7 +1720,33 @@ const seleccionarPaso = async (paso) => {
       icon: 'info',
       title: 'Paso completado',
       text: 'Este paso ya ha sido completado y no se puede editar.',
-      confirmButtonText: 'Entendido'
+    })
+    return
+  }
+
+  // Si es paso de servicio y es cambio de domicilio, mostrar diálogo
+  if (paso === 'servicio' && tipoTarea.value === 2 && !preguntaModemMostrada.value) {
+    const result = await Swal.fire({
+      title: 'Cambio de Domicilio',
+      text: '¿Se usará el mismo módem o se hará un cambio?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Usar el mismo',
+      cancelButtonText: 'Usar uno nuevo',
+      allowOutsideClick: false,
+      allowEscapeKey: false
+    })
+    
+    usarMismoModem.value = result.isConfirmed
+    preguntaModemMostrada.value = true
+  }
+
+  if (pasosCompletados.value[paso]) {
+    await Swal.fire({
+      icon: 'info',
+      title: 'Paso completado',
+      text: 'Este paso ya ha sido completado y no se puede editar.',
+      confirmButtonText: 'Entendido',
     })
     return
   }
@@ -1666,7 +1836,27 @@ const guardarPaso = async () => {
   guardandoPaso.value = true
   
       try {
-      // PRIMERO: Validar campos según el paso seleccionado (sin coordenadas)
+        // Si es cambio de domicilio con nuevo modem, verificar si la ONT existe en el inventario
+        if (tipoTarea.value === 2 && !usarMismoModem && pasoSeleccionado.value === 'ont') {
+          const ontValue = ont.ont?.trim()
+          if (ontValue && ontOptions.value.includes(ontValue)) {
+            const result = await Swal.fire({
+              title: 'ONT en Inventario',
+              text: 'Esta ONT existe en su inventario. ¿Está seguro de querer usarla?',
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonText: 'Sí, usar esta ONT',
+              cancelButtonText: 'No, cancelar'
+            })
+            
+            if (!result.isConfirmed) {
+              guardandoPaso.value = false
+              return
+            }
+          }
+        }
+        
+        // PRIMERO: Validar campos según el paso seleccionado (sin coordenadas)
       if (!(await validarCamposPaso())) {
         guardandoPaso.value = false
         return
@@ -1761,9 +1951,9 @@ const validarCamposPaso = async () => {
           mensaje = 'El número exterior debe tener máximo 7 caracteres'
           valido = false
         }
-        // Validar calle (máximo 15 caracteres)
-        if (domicilio.calle && domicilio.calle.length > 15) {
-          mensaje = 'La calle debe tener máximo 15 caracteres'
+        // Validar calle (máximo 30 caracteres)
+        if (domicilio.calle && domicilio.calle.length > 30) {
+          mensaje = 'La calle debe tener máximo 30 caracteres'
           valido = false
         }
         // Validar que la foto de la fachada esté presente
@@ -1799,6 +1989,17 @@ const validarCamposPaso = async () => {
           mensaje = 'El tipo de instalación debe ser SUBTERRANEA o AEREA'
           valido = false
         }
+        // Validar queja para tipoTarea=3 (Queja)
+        if (tipoTarea.value === 3) {
+          if (!servicio.codigoLiquidacion) {
+            mensaje = 'El código de liquidación es obligatorio para queja.';
+            valido = false;
+          }
+          if (!servicio.descripcionQueja) {
+            mensaje = 'La descripción de la queja es obligatoria para queja.';
+            valido = false;
+          }
+        }
       }
       if (!servicio.tieneFotoOS) {
         mensaje = 'Por favor tome una foto de la OS'
@@ -1807,7 +2008,17 @@ const validarCamposPaso = async () => {
       break
       
     case 'ont':
-      // Solo validar las fotos, no el campo ont.ont
+      // Validar que se haya contestado la pregunta de modem antes de guardar (solo tipoTarea=2 o 3)
+      if ((tipoTarea.value === 2 || tipoTarea.value === 3) && usarMismoModem === null) {
+        mensaje = 'Debe contestar si se usará módem nuevo antes de continuar.';
+        valido = false;
+      }
+      // Si se usará módem nuevo, el campo ONT es obligatorio
+      if ((tipoTarea.value === 2 || tipoTarea.value === 3) && usarMismoModem === true && !ont.ont) {
+        mensaje = 'El campo ONT es obligatorio si se usará módem nuevo.';
+        valido = false;
+      }
+      // Validar las fotos
       if (!ont.tieneFotoONT) {
         mensaje = 'Por favor tome una foto del ONT/Modem'
         valido = false
@@ -1923,7 +2134,10 @@ const prepararDatos = () => {
         Tecnologia: servicio.tecnologia,
         Metraje: servicio.metraje,
         Tipo_Instalacion: servicio.tipoInstalacion,
-        Foto_INE: servicio.fotoOSBase64 || convertirImagenABase64(servicio.fotoOS)
+        Foto_INE: servicio.fotoOSBase64 || convertirImagenABase64(servicio.fotoOS),
+        // Nuevos campos para tipoTarea = 3 (Queja)
+        Codigo_Liquidacion: servicio.codigoLiquidacion,
+        Descripcion_Queja: servicio.descripcionQueja
       })
       break
       
@@ -1932,6 +2146,15 @@ const prepararDatos = () => {
         Ont: ont.ont,
         Foto_Ont: ont.fotoONTBase64 || convertirImagenABase64(ont.fotoONT),
         No_Serie_ONT: ont.fotoSerieONTBase64 || convertirImagenABase64(ont.fotoSerieONT)
+      })
+      break
+    case 'ontCobre':
+      Object.assign(datos, {
+        FK_Folio_Pisa_Cobre: folioPisa.value ? parseInt(folioPisa.value) : 0,
+        Fecha: fechaMonterrey,
+        Num_Serie_Ont_Cobre: ont.ontCobreSerial,
+        Foto_Ont_Cobre_Delante: ont.fotoFrontalCobre,
+        Foto_Ont_Cobre_Detras: ont.fotoTraseraCobre
       })
       break
       
@@ -2098,7 +2321,6 @@ const tomarFoto = async () => {
   }
   
   tomandoFotoFachada.value = true
-  
   try {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       inputFoto.value.click()
@@ -2152,7 +2374,6 @@ const tomarFotoOS = async () => {
   }
   
   tomandoFotoOS.value = true
-  
   try {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       inputFotoOS.value.click()
@@ -2232,7 +2453,6 @@ const tomarFotoONT = async () => {
   }
   
   tomandoFotoONT.value = true
-  
   try {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       inputFotoONT.value.click()
@@ -2286,7 +2506,6 @@ const tomarFotoSerieONT = async () => {
   }
   
   tomandoFotoSerieONT.value = true
-  
   try {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       inputFotoSerieONT.value.click()
@@ -2350,7 +2569,6 @@ const tomarFotoTerminal = async () => {
   }
   
   tomandoFotoTerminal.value = true
-  
   try {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       inputFotoTerminal.value.click()
@@ -3549,6 +3767,7 @@ textarea:focus {
   
   .etiqueta, .menu-descripcion {
     color: #aaa;
+ 
   }
   
   .paso-nombre {
@@ -3708,6 +3927,16 @@ textarea:focus {
 }
 .os-folio {
   color: #a3ca38;
+  background: #222;
+  border-radius: 8px;
+}
+
+.tipo-tarea-label {
+  margin-left: 16px;
+}
+
+.os-tipo-tarea {
+  color: #3498db;
   background: #222;
   border-radius: 8px;
   padding: 4px 18px;

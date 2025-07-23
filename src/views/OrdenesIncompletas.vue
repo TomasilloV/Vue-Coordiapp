@@ -35,6 +35,7 @@
             </tr>
           </tbody>
         </table>
+
         <!-- Overlay flotante solo en móvil -->
         <div class="accion-overlay" v-if="mostrarOverlay" :style="overlayStyle">
           <div v-for="(orden, index) in ordenesPaginadas" :key="`overlay-${orden.Folio_Pisa}-${pagina}-${index}`" class="overlay-boton" :style="getOverlayBtnStyle(index)">
@@ -48,6 +49,7 @@
           </div>
         </div>
       </div>
+
       <!-- Tabla de pruebas hardcodeada -->
       <div class="tabla-pruebas-container">
         <h3>Tabla de Pruebas</h3>
@@ -65,29 +67,30 @@
               <td>1029384756</td>
               <td>9284019248</td>
               <td>A01LP4G</td>
-              <td><button class="boton-iniciar">Iniciar</button></td>
+              <td><button class="boton-iniciar" @click="iniciarTareaDesdePrueba('A01LP4G')">Iniciar</button></td>
             </tr>
             <tr>
               <td>1029384756</td>
               <td>8293838201</td>
               <td>QMSMPZOG</td>
-              <td><button class="boton-iniciar">Iniciar</button></td>
+              <td><button class="boton-iniciar" @click="iniciarTareaDesdePrueba('QMSMPZOG')">Iniciar</button></td>
             </tr>
             <tr>
               <td>1029384756</td>
               <td>0293847383</td>
               <td>TSMSMPZ4G</td>
-              <td><button class="boton-iniciar">Iniciar</button></td>
+              <td><button class="boton-iniciar" @click="iniciarTareaDesdePrueba('TSMSMPZ4G')">Iniciar</button></td>
             </tr>
             <tr>
               <td>1029384756</td>
               <td>7383828291</td>
               <td>D21LP4N</td>
-              <td><button class="boton-iniciar">Iniciar</button></td>
+              <td><button class="boton-iniciar" @click="iniciarTareaDesdePrueba('D21LP4N')">Iniciar</button></td>
             </tr>
           </tbody>
         </table>
       </div>
+
       <div v-if="totalPaginas > 1" class="paginacion">
         <button @click="pagina--" :disabled="pagina === 1">Anterior</button>
         <span>Página {{ pagina }} de {{ totalPaginas }}</span>
@@ -124,12 +127,62 @@ const ordenesPaginadas = computed(() => {
   return ordenes.value.slice(inicio, inicio + porPagina)
 })
 
+// Función que devuelve texto y tipo numérico sin texto adicional
+function EmuladorTipo(tipo_tarea) {
+  tipo_tarea = tipo_tarea.toUpperCase();
+
+  if (tipo_tarea.substring(0, 2) !== "A4") {
+    if (tipo_tarea.charAt(0) === "A") {
+      return { texto: "ALTA", tipo: 1 };
+    }
+  }
+
+  if (tipo_tarea.charAt(0) === "D") {
+    return { texto: "CAMBIO DOMICILIO", tipo: 2 };
+  }
+
+  const migracionPrefixes = ["FC", "TI", "TS", "TV"];
+  if (migracionPrefixes.includes(tipo_tarea.substring(0, 2))) {
+    return { texto: "MIGRACIÓN", tipo: 4 };
+  }
+
+  if (tipo_tarea.substring(0, 2) === "A4") {
+    return { texto: "RECONEXIÓN (A4)", tipo: 5 };
+  }
+
+  const queja = ["Q", "R", "C"];
+  const queja2 = ["EB", "EI", "EU", "GD", "MG"];
+  const queja3 = ["F597", "F841"];
+  if (
+    queja.includes(tipo_tarea.charAt(0)) ||
+    queja2.includes(tipo_tarea.substring(0, 2)) ||
+    queja3.includes(tipo_tarea.substring(0, 4))
+  ) {
+    return { texto: "QUEJA (PSR)", tipo: 3 };
+  }
+
+  return { texto: "", tipo: 0 };
+}
+
+function iniciarTareaDesdePrueba(tipoTarea) {
+  const tipoDetectado = EmuladorTipo(tipoTarea)
+  console.log(`Tipo de tarea detectado: texto="${tipoDetectado.texto}", tipo=${tipoDetectado.tipo}`)
+
+  // Redirigir a la ruta /nuevo-registro 
+  router.push({
+    name: 'NuevoRegistro',
+    query: {
+      tipo: tipoDetectado.tipo,
+      texto: tipoDetectado.texto || ''
+    }
+  })
+}
+
 const getOverlayBtnStyle = (index) => {
   if (!tablaRef.value) return {}
   const filas = tablaRef.value.querySelectorAll('tbody tr')
   if (!filas[index]) return {}
   const rect = filas[index].getBoundingClientRect()
-  const tableRect = tablaRef.value.getBoundingClientRect()
   return {
     position: 'fixed',
     top: `${rect.top}px`,
@@ -144,21 +197,18 @@ const getOverlayBtnStyle = (index) => {
 
 const syncOverlay = () => {
   if (!tablaWrapperRef.value || !tablaRef.value) return
-  const wrapper = tablaWrapperRef.value
   const tabla = tablaRef.value
   const theadHeight = tabla.tHead.offsetHeight
   const tbodyHeight = tabla.tBodies[0].offsetHeight
-  // El overlay SIEMPRE cubre todo el tbody
-  const overlayHeight = tbodyHeight
   overlayStyle.value = {
     position: 'fixed',
     top: `${tabla.getBoundingClientRect().top + theadHeight}px`,
-    right: '0px', // Fijamos a la derecha de la ventana
+    right: '0px',
     width: '100px',
-    height: `${overlayHeight}px`,
+    height: `${tbodyHeight}px`,
     background: 'linear-gradient(to left, rgba(44,62,80,0.98) 85%, rgba(44,62,80,0.0) 100%)',
     boxShadow: '-4px 0 16px rgba(0,0,0,0.28)',
-    zIndex: 100, // Aumentamos el z-index para asegurar que esté por encima de otros elementos
+    zIndex: 100,
     borderRadius: '0 8px 8px 0',
     pointerEvents: 'none',
     display: 'block',
@@ -171,7 +221,6 @@ const checkOverlay = () => {
   nextTick(() => syncOverlay())
 }
 
-// Actualizar overlay cuando cambie la página o las órdenes
 watch([pagina, ordenes], () => {
   nextTick(() => {
     syncOverlay()
@@ -187,9 +236,8 @@ onMounted(async () => {
   if (tablaWrapperRef.value) {
     tablaWrapperRef.value.addEventListener('scroll', syncOverlay)
   }
-  // Añadir evento de scroll global para mantener los botones alineados
   window.addEventListener('scroll', syncOverlay)
-  // Cargar órdenes
+
   const tecnico = JSON.parse(localStorage.getItem('usuario'))
   const tecnicoId = tecnico?.idTecnico
   if (!tecnicoId) {
@@ -229,6 +277,11 @@ async function terminarOrden(folioPisa) {
           })
           return
         }
+
+        // Obtener tipo de tarea y tipo numérico
+        const { texto: tipoTexto, tipo: tipoNum } = EmuladorTipo(orden.Step_Registro)
+        console.log(`Tipo de tarea: ${tipoTexto}, Tipo numérico: ${tipoNum}`)
+
         const fechaActual = new Date()
         const fecha = fechaActual.toISOString().slice(0, 19).replace('T', ' ')
         const tecnico = JSON.parse(localStorage.getItem('usuario'))
@@ -259,11 +312,11 @@ async function terminarOrden(folioPisa) {
               })
               if (pasosResponse.data && pasosResponse.data.items && pasosResponse.data.items.length > 0) {
                 const estadoPasos = pasosResponse.data.items[0]
-                const todosLosPasosCompletados = estadoPasos.paso_1 === 1 && 
-                                                estadoPasos.paso_2 === 1 && 
-                                                estadoPasos.paso_3 === 1 && 
-                                                estadoPasos.paso_4 === 1 && 
-                                                estadoPasos.paso_5 === 1
+                const todosLosPasosCompletados = estadoPasos.paso_1 === 1 &&
+                  estadoPasos.paso_2 === 1 &&
+                  estadoPasos.paso_3 === 1 &&
+                  estadoPasos.paso_4 === 1 &&
+                  estadoPasos.paso_5 === 1
                 if (todosLosPasosCompletados) {
                   await Swal.fire({
                     icon: 'info',
@@ -271,7 +324,6 @@ async function terminarOrden(folioPisa) {
                     text: 'Esta orden ya ha sido completada. Todos los pasos han sido finalizados.',
                     confirmButtonText: 'Entendido'
                   })
-                  // Recargar la lista de órdenes incompletas
                   const tecnico = JSON.parse(localStorage.getItem('usuario'))
                   const tecnicoId = tecnico?.idTecnico
                   if (tecnicoId) {
